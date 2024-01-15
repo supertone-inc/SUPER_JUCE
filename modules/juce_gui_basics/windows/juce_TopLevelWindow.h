@@ -106,6 +106,9 @@ public:
     /** Returns true if the window is currently using an OS-native title bar.
         @see setUsingNativeTitleBar
     */
+    
+    void super__setTransparentTitleBar(bool transparentTitleBar);
+    
     bool isUsingNativeTitleBar() const noexcept;
 
     //==============================================================================
@@ -156,7 +159,7 @@ protected:
 private:
     friend class detail::TopLevelWindowManager;
     friend class ResizableWindow;
-    bool useDropShadow = true, useNativeTitleBar = false, isCurrentlyActive = false;
+    bool useDropShadow = true, useNativeTitleBar = false, isCurrentlyActive = false, useTransparentTitle = false;
     std::unique_ptr<DropShadower> shadower;
 
     void setWindowActive (bool);

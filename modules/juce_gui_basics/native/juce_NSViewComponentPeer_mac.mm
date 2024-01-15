@@ -242,6 +242,10 @@ public:
                                                          backing: NSBackingStoreBuffered
                                                            defer: YES];
             [window setColorSpace: [NSColorSpace sRGBColorSpace]];
+            
+            if((windowStyleFlags & super__windowsTransparentTitleBar) != 0)
+                [window setTitlebarAppearsTransparent: YES];
+            
             setOwner (window, this);
 
             if (@available (macOS 10.10, *))
@@ -1444,6 +1448,7 @@ public:
         if ((flags & windowHasMinimiseButton) != 0)  style |= NSWindowStyleMaskMiniaturizable;
         if ((flags & windowHasCloseButton) != 0)     style |= NSWindowStyleMaskClosable;
         if ((flags & windowIsResizable) != 0)        style |= NSWindowStyleMaskResizable;
+        if ((flags & super__windowsTransparentTitleBar) != 0)        style |= NSWindowStyleMaskFullSizeContentView;
         return style;
     }
 

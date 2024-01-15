@@ -99,7 +99,7 @@ int TopLevelWindow::getDesktopWindowStyleFlags() const
 
     if (useDropShadow)       styleFlags |= ComponentPeer::windowHasDropShadow;
     if (useNativeTitleBar)   styleFlags |= ComponentPeer::windowHasTitleBar;
-
+    if (useTransparentTitle) styleFlags |= ComponentPeer::super__windowsTransparentTitleBar;
     return styleFlags;
 }
 
@@ -137,6 +137,17 @@ void TopLevelWindow::setUsingNativeTitleBar (const bool shouldUseNativeTitleBar)
     {
         detail::FocusRestorer focusRestorer;
         useNativeTitleBar = shouldUseNativeTitleBar;
+        recreateDesktopWindow();
+        sendLookAndFeelChange();
+    }
+}
+
+void TopLevelWindow::super__setTransparentTitleBar(bool transparentTitleBar)
+{
+    if(useTransparentTitle != transparentTitleBar)
+    {
+        detail::FocusRestorer focusRestorer;
+        useTransparentTitle = transparentTitleBar;
         recreateDesktopWindow();
         sendLookAndFeelChange();
     }
