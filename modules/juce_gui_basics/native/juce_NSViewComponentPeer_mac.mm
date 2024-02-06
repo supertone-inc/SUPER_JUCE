@@ -246,6 +246,9 @@ public:
             if((windowStyleFlags & super__windowsTransparentTitleBar) != 0)
                 [window setTitlebarAppearsTransparent: YES];
             
+            if ((windowStyleFlags & super__windowsHideMaximiseButton) != 0)
+                [window standardWindowButton:NSWindowZoomButton].hidden = YES;
+            
             setOwner (window, this);
 
             if (@available (macOS 10.10, *))
@@ -278,7 +281,7 @@ public:
             [window setIgnoresMouseEvents: (windowStyleFlags & windowIgnoresMouseClicks) != 0];
 
             setCollectionBehaviour (false);
-
+            
             [window setRestorable: NO];
 
             if (@available (macOS 10.12, *))
@@ -1449,6 +1452,7 @@ public:
         if ((flags & windowHasCloseButton) != 0)     style |= NSWindowStyleMaskClosable;
         if ((flags & windowIsResizable) != 0)        style |= NSWindowStyleMaskResizable;
         if ((flags & super__windowsTransparentTitleBar) != 0)        style |= NSWindowStyleMaskFullSizeContentView;
+        
         return style;
     }
 

@@ -108,6 +108,7 @@ public:
     */
     
     void super__setTransparentTitleBar(bool transparentTitleBar);
+    void super__setHideMaximiseButton(bool hideMaximiseButton);
     
     bool isUsingNativeTitleBar() const noexcept;
 
@@ -159,7 +160,7 @@ protected:
 private:
     friend class detail::TopLevelWindowManager;
     friend class ResizableWindow;
-    bool useDropShadow = true, useNativeTitleBar = false, isCurrentlyActive = false, useTransparentTitle = false;
+    bool useDropShadow = true, useNativeTitleBar = false, isCurrentlyActive = false, useTransparentTitle = false, useHideMaximiseButton = false;
     std::unique_ptr<DropShadower> shadower;
 
     void setWindowActive (bool);
