@@ -22,6 +22,7 @@
 
   ==============================================================================
 */
+#include "juce_gui_basics/native/ToolbarManager.mm"
 
 @interface NSEvent (DeviceDelta)
 - (float)deviceDeltaX;
@@ -236,7 +237,7 @@ public:
             r.origin.x = (CGFloat) component.getX();
             r.origin.y = (CGFloat) component.getY();
             r = flippedScreenRect (r);
-
+            
             window = [createWindowInstance() initWithContentRect: r
                                                        styleMask: getNSWindowStyleMask (windowStyleFlags)
                                                          backing: NSBackingStoreBuffered
@@ -307,6 +308,9 @@ public:
 
             return ModifierKeys::currentModifiers;
         };
+        
+        ToolbarManager* toolbarManager = [[ToolbarManager alloc] init];
+        [toolbarManager setupToolbarForWindow:window];
     }
 
     ~NSViewComponentPeer() override
