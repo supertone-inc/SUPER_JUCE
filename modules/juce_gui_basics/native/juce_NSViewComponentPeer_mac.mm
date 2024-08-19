@@ -244,17 +244,7 @@ public:
             [window setColorSpace: [NSColorSpace sRGBColorSpace]];
             
             if((windowStyleFlags & super__windowsTransparentTitleBar) != 0)
-            {
                 [window setTitlebarAppearsTransparent: YES];
-                
-                // Create a new NSToolbar instance and set its delegate
-                NSToolbar* toolbar = [[NSToolbar alloc] initWithIdentifier:@"ShiftAppToolbar"];
-                [toolbar setDisplayMode:NSToolbarDisplayModeIconOnly];
-                [toolbar setSizeMode:NSToolbarSizeModeRegular];
-
-                // Set the window's toolbar
-                [window setToolbar:toolbar];
-            }
             
             setOwner (window, this);
 
