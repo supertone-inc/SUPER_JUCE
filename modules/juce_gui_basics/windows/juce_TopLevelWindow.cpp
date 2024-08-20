@@ -100,6 +100,8 @@ int TopLevelWindow::getDesktopWindowStyleFlags() const
     if (useDropShadow)       styleFlags |= ComponentPeer::windowHasDropShadow;
     if (useNativeTitleBar)   styleFlags |= ComponentPeer::windowHasTitleBar;
     if (useTransparentTitle) styleFlags |= ComponentPeer::super__windowsTransparentTitleBar;
+    if (useHideMaximiseButton) styleFlags |= ComponentPeer::super__windowsHideMaximiseButton;
+
     return styleFlags;
 }
 
@@ -152,6 +154,18 @@ void TopLevelWindow::super__setTransparentTitleBar(bool transparentTitleBar)
         sendLookAndFeelChange();
     }
 }
+
+void TopLevelWindow::super__setHideMaximiseButton(bool hideMaximiseButton)
+{
+    if(useHideMaximiseButton != hideMaximiseButton)
+    {
+        detail::FocusRestorer focusRestorer;
+        useHideMaximiseButton = hideMaximiseButton;
+        recreateDesktopWindow();
+        sendLookAndFeelChange();
+    }
+}
+
 
 void TopLevelWindow::recreateDesktopWindow()
 {
