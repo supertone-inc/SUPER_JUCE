@@ -44,6 +44,10 @@
 #include <juce_audio_processors/format_types/juce_LegacyAudioParameter.cpp>
 
 JUCE_BEGIN_IGNORE_WARNINGS_MSVC (4127 4512 4996 5272)
+#if JucePlugin_EnhancedAudioSuite
+ #include <juce_audio_formats/format/juce_AudioFormatReader.h>
+#endif
+
 JUCE_BEGIN_IGNORE_WARNINGS_GCC_LIKE ("-Wdeprecated-declarations",
                                      "-Wextra-semi",
                                      "-Wfloat-equal",
