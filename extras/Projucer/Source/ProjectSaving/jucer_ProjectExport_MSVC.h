@@ -1,24 +1,33 @@
 /*
   ==============================================================================
 
-   This file is part of the JUCE library.
-   Copyright (c) 2022 - Raw Material Software Limited
+   This file is part of the JUCE framework.
+   Copyright (c) Raw Material Software Limited
 
-   JUCE is an open source library subject to commercial or open-source
+   JUCE is an open source framework subject to commercial or open source
    licensing.
 
-   By using JUCE, you agree to the terms of both the JUCE 7 End-User License
-   Agreement and JUCE Privacy Policy.
+   By downloading, installing, or using the JUCE framework, or combining the
+   JUCE framework with any other source code, object code, content or any other
+   copyrightable work, you agree to the terms of the JUCE End User Licence
+   Agreement, and all incorporated terms including the JUCE Privacy Policy and
+   the JUCE Website Terms of Service, as applicable, which will bind you. If you
+   do not agree to the terms of these agreements, we will not license the JUCE
+   framework to you, and you must discontinue the installation or download
+   process and cease use of the JUCE framework.
 
-   End User License Agreement: www.juce.com/juce-7-licence
-   Privacy Policy: www.juce.com/juce-privacy-policy
+   JUCE End User Licence Agreement: https://juce.com/legal/juce-8-licence/
+   JUCE Privacy Policy: https://juce.com/juce-privacy-policy
+   JUCE Website Terms of Service: https://juce.com/juce-website-terms-of-service/
 
-   Or: You may also use this code under the terms of the GPL v3 (see
-   www.gnu.org/licenses).
+   Or:
 
-   JUCE IS PROVIDED "AS IS" WITHOUT ANY WARRANTY, AND ALL WARRANTIES, WHETHER
-   EXPRESSED OR IMPLIED, INCLUDING MERCHANTABILITY AND FITNESS FOR PURPOSE, ARE
-   DISCLAIMED.
+   You may also use this code under the terms of the AGPLv3:
+   https://www.gnu.org/licenses/agpl-3.0.en.html
+
+   THE JUCE FRAMEWORK IS PROVIDED "AS IS" WITHOUT ANY WARRANTY, AND ALL
+   WARRANTIES, WHETHER EXPRESSED OR IMPLIED, INCLUDING WARRANTY OF
+   MERCHANTABILITY OR FITNESS FOR A PARTICULAR PURPOSE, ARE DISCLAIMED.
 
   ==============================================================================
 */
@@ -167,7 +176,6 @@ public:
               prebuildCommandValue           (config, Ids::prebuildCommand,            getUndoManager()),
               postbuildCommandValue          (config, Ids::postbuildCommand,           getUndoManager()),
               generateDebugSymbolsValue      (config, Ids::alwaysGenerateDebugSymbols, getUndoManager(), false),
-              generateManifestValue          (config, Ids::generateManifest,           getUndoManager(), true),
               enableIncrementalLinkingValue  (config, Ids::enableIncrementalLinking,   getUndoManager(), false),
               useRuntimeLibDLLValue          (config, Ids::useRuntimeLibDLL,           getUndoManager(), true),
               multiProcessorCompilationValue (config, Ids::multiProcessorCompilation,  getUndoManager(), true),
@@ -211,7 +219,6 @@ public:
         String getDebugInformationFormatString() const    { return debugInformationFormatValue.get(); }
 
         bool shouldGenerateDebugSymbols() const           { return generateDebugSymbolsValue.get(); }
-        bool shouldGenerateManifest() const               { return generateManifestValue.get(); }
         bool shouldLinkIncremental() const                { return enableIncrementalLinkingValue.get(); }
         bool isUsingRuntimeLibDLL() const                 { return useRuntimeLibDLLValue.get(); }
         bool shouldUseMultiProcessorCompilation() const   { return multiProcessorCompilationValue.get(); }
@@ -314,9 +321,6 @@ public:
             props.add (new TextPropertyComponent (postbuildCommandValue, "Post-build Command", 2048, true),
                        "Some command that will be run after a build starts.");
 
-            props.add (new ChoicePropertyComponent (generateManifestValue, "Generate Manifest"),
-                       "Enable this to generate a Manifest file.");
-
             props.add (new ChoicePropertyComponent (characterSetValue, "Character Set",
                                                     { "MultiByte", "Unicode" },
                                                     { "MultiByte", "Unicode" }),
@@ -342,7 +346,7 @@ public:
 
     private:
         ValueTreePropertyWithDefault warningLevelValue, warningsAreErrorsValue, prebuildCommandValue, postbuildCommandValue, generateDebugSymbolsValue,
-                                     generateManifestValue, enableIncrementalLinkingValue, useRuntimeLibDLLValue, multiProcessorCompilationValue,
+                                     enableIncrementalLinkingValue, useRuntimeLibDLLValue, multiProcessorCompilationValue,
                                      intermediatesPathValue, characterSetValue, architectureTypeValue, fastMathValue, debugInformationFormatValue,
                                      pluginBinaryCopyStepValue;
 
@@ -561,7 +565,7 @@ public:
                     {
                         auto* manifest = props->createNewChildElement ("GenerateManifest");
                         setConditionAttribute (*manifest, config);
-                        manifest->addTextElement (config.shouldGenerateManifest() ? "true" : "false");
+                        manifest->addTextElement ("true");
                     }
 
                     if (type != SharedCodeTarget)
@@ -746,16 +750,6 @@ public:
                                                                           getOwner().getTargetFolder(),
                                                                           build_tools::RelativePath::buildTargetFolder).toWindowsStyle());
                     }
-
-                    if (type == VST3Helper)
-                    {
-                        const auto manifest = getOwner().getModuleFolderRelativeToProject ("juce_audio_processors").getChildFile ("format_types")
-                                                                                                                   .getChildFile ("VST3_SDK")
-                                                                                                                   .getChildFile ("helper.manifest");
-                        additional->addTextElement (manifest.rebased (getOwner().getProject().getFile().getParentDirectory(),
-                                                                      getOwner().getTargetFolder(),
-                                                                      build_tools::RelativePath::buildTargetFolder).toWindowsStyle());
-                    }
                 }
 
                 if (getTargetFileType() == staticLibrary && config.getArchitectureString() == "Win32")
@@ -835,17 +829,24 @@ public:
             }
 
             {
-                auto* importGroup = projectXml.createNewChildElement ("ImportGroup");
-                importGroup->setAttribute ("Label", "ExtensionTargets");
-
                 if (owner.shouldAddWebView2Package())
                 {
+                    auto* importGroup = projectXml.createNewChildElement ("ImportGroup");
+                    importGroup->setAttribute ("Label", "ExtensionTargets");
+
                     auto packageTargetsPath = "packages\\" + getWebView2PackageName() + "." + getWebView2PackageVersion()
                                             + "\\build\\native\\" + getWebView2PackageName() + ".targets";
 
                     auto* e = importGroup->createNewChildElement ("Import");
                     e->setAttribute ("Project", packageTargetsPath);
                     e->setAttribute ("Condition", "Exists('" + packageTargetsPath + "')");
+                }
+
+                if (owner.shouldLinkWebView2Statically())
+                {
+                    auto* propertyGroup = projectXml.createNewChildElement ("PropertyGroup");
+                    auto* loaderPref = propertyGroup->createNewChildElement ("WebView2LoaderPreference");
+                    loaderPref->addTextElement ("Static");
                 }
             }
         }
@@ -1227,7 +1228,7 @@ public:
         //==============================================================================
         build_tools::RelativePath getAAXIconFile() const
         {
-            build_tools::RelativePath aaxSDK (owner.getAAXPathString(), build_tools::RelativePath::projectFolder);
+            const auto aaxSdk = owner.getAAXPathRelative();
             build_tools::RelativePath projectIcon ("icon.ico", build_tools::RelativePath::buildTargetFolder);
 
             if (getOwner().getTargetFolder().getChildFile ("icon.ico").existsAsFile())
@@ -1235,7 +1236,7 @@ public:
                                             getOwner().getProject().getProjectFolder(),
                                             build_tools::RelativePath::projectFolder);
 
-            return aaxSDK.getChildFile ("Utilities").getChildFile ("PlugIn.ico");
+            return aaxSdk.getChildFile ("Utilities").getChildFile ("PlugIn.ico");
         }
 
         String getExtraPostBuildSteps (const MSVCBuildConfiguration& config) const
@@ -1260,10 +1261,10 @@ public:
 
             if (type == AAXPlugIn)
             {
-                const build_tools::RelativePath aaxSDK (owner.getAAXPathString(), build_tools::RelativePath::projectFolder);
-                const build_tools::RelativePath aaxLibsFolder = aaxSDK.getChildFile ("Libs");
-                const build_tools::RelativePath bundleScript  = aaxSDK.getChildFile ("Utilities").getChildFile ("CreatePackage.bat");
-                const build_tools::RelativePath iconFilePath  = getAAXIconFile();
+                const auto aaxSdk = owner.getAAXPathRelative();
+                const auto aaxLibsFolder = aaxSdk.getChildFile ("Libs");
+                const auto bundleScript  = aaxSdk.getChildFile ("Utilities").getChildFile ("CreatePackage.bat");
+                const auto iconFilePath  = getAAXIconFile();
 
                 const auto segments = getAaxBundleStructure (config);
 
@@ -1527,7 +1528,6 @@ public:
 
     bool isXcode() const override                            { return false; }
     bool isVisualStudio() const override                     { return true; }
-    bool isCodeBlocks() const override                       { return false; }
     bool isMakefile() const override                         { return false; }
     bool isAndroidStudio() const override                    { return false; }
 
@@ -1585,6 +1585,12 @@ public:
     bool launchProject() override
     {
        #if JUCE_WINDOWS
+        // Don't launch if already open
+        const auto foundDBFiles = getSLNFile().getSiblingFile (".vs").findChildFiles (File::findFiles, true, "*.opendb", File::FollowSymlinks::no);
+
+        if (! foundDBFiles.isEmpty())
+            return false;
+
         return getSLNFile().startAsProcess();
        #else
         return false;
@@ -1873,11 +1879,18 @@ protected:
     bool shouldAddWebView2Package() const
     {
         return project.getEnabledModules().isModuleEnabled ("juce_gui_extra")
-              && project.isConfigFlagEnabled ("JUCE_USE_WIN_WEBVIEW2", false);
+              && (   project.isConfigFlagEnabled ("JUCE_USE_WIN_WEBVIEW2", false)
+                  || project.isConfigFlagEnabled ("JUCE_USE_WIN_WEBVIEW2_WITH_STATIC_LINKING", false));
+    }
+
+    bool shouldLinkWebView2Statically() const
+    {
+        return project.getEnabledModules().isModuleEnabled ("juce_gui_extra")
+               && project.isConfigFlagEnabled ("JUCE_USE_WIN_WEBVIEW2_WITH_STATIC_LINKING", false);
     }
 
     static String getWebView2PackageName()     { return "Microsoft.Web.WebView2"; }
-    static String getWebView2PackageVersion()  { return "1.0.902.49"; }
+    static String getWebView2PackageVersion()  { return "1.0.1901.177"; }
 
     void createPackagesConfigFile() const
     {
@@ -1911,7 +1924,8 @@ protected:
 
         return name.equalsIgnoreCase ("include_juce_gui_basics")
             || name.equalsIgnoreCase ("include_juce_audio_processors")
-            || name.equalsIgnoreCase ("include_juce_core");
+            || name.equalsIgnoreCase ("include_juce_core")
+            || name.equalsIgnoreCase ("include_juce_graphics");
     }
 
     StringArray getModuleLibs() const
@@ -1925,51 +1939,6 @@ protected:
     }
 
     JUCE_DECLARE_NON_COPYABLE (MSVCProjectExporterBase)
-};
-
-//==============================================================================
-class MSVCProjectExporterVC2017 final : public MSVCProjectExporterBase
-{
-public:
-    MSVCProjectExporterVC2017 (Project& p, const ValueTree& t)
-        : MSVCProjectExporterBase (p, t, getTargetFolderName())
-    {
-        name = getDisplayName();
-
-        targetPlatformVersion.setDefault (defaultTargetPlatform);
-        platformToolsetValue.setDefault (defaultToolset);
-    }
-
-    static String getDisplayName()        { return "Visual Studio 2017"; }
-    static String getValueTreeTypeName()  { return "VS2017"; }
-    static String getTargetFolderName()   { return "VisualStudio2017"; }
-
-    Identifier getExporterIdentifier() const override { return getValueTreeTypeName(); }
-
-    int getVisualStudioVersion() const override                      { return 15; }
-    String getSolutionComment() const override                       { return "# Visual Studio 15"; }
-    String getToolsVersion() const override                          { return "15.0"; }
-    String getDefaultToolset() const override                        { return defaultToolset; }
-    String getDefaultWindowsTargetPlatformVersion() const override   { return defaultTargetPlatform; }
-
-    static MSVCProjectExporterVC2017* createForSettings (Project& projectToUse, const ValueTree& settingsToUse)
-    {
-        if (settingsToUse.hasType (getValueTreeTypeName()))
-            return new MSVCProjectExporterVC2017 (projectToUse, settingsToUse);
-
-        return nullptr;
-    }
-
-    void createExporterProperties (PropertyListBuilder& props) override
-    {
-        addToolsetProperty (props, { "v140", "v140_xp", "v141", "v141_xp" });
-        MSVCProjectExporterBase::createExporterProperties (props);
-    }
-
-private:
-    const String defaultToolset { "v141" }, defaultTargetPlatform { "Latest" };
-
-    JUCE_DECLARE_NON_COPYABLE (MSVCProjectExporterVC2017)
 };
 
 //==============================================================================

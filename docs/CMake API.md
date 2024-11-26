@@ -2,9 +2,8 @@
 
 ## System Requirements
 
-- All project types require CMake 3.15 or higher.
+- All project types require CMake 3.22 or higher.
 - Android targets are not currently supported.
-- WebView2 on Windows via JUCE_USE_WIN_WEBVIEW2 flag in juce_gui_extra is not currently supported.
 
 Most system package managers have packages for CMake, but we recommend using the most recent release
 from https://cmake.org/download. You should always use a CMake that's newer than your build
@@ -144,11 +143,10 @@ you can configure a Clang-cl build by passing "-T ClangCL" on your configuration
 If you wish to use Clang with GNU-like command-line instead, you can pass
 `-DCMAKE_CXX_COMPILER=clang++` and `-DCMAKE_C_COMPILER=clang` on your configuration commandline.
 clang++ and clang must be on your `PATH` for this to work. Only more recent versions of CMake
-support Clang's GNU-like command-line on Windows. CMake 3.12 is not supported, CMake 3.15 has
-support, CMake 3.20 or higher is recommended.  Note that CMake doesn't seem to automatically link a
-runtime library when building in this configuration, but this can be remedied by setting the
-`MSVC_RUNTIME_LIBRARY` property. See the [official
-documentation](https://cmake.org/cmake/help/v3.15/prop_tgt/MSVC_RUNTIME_LIBRARY.html) of this
+support Clang's GNU-like command-line on Windows.   Note that CMake doesn't seem to automatically
+link a runtime library when building in this configuration, but this can be remedied by setting
+the `MSVC_RUNTIME_LIBRARY` property. See the [official
+documentation](https://cmake.org/cmake/help/v3.22/prop_tgt/MSVC_RUNTIME_LIBRARY.html) of this
 property for usage recommendations.
 
 ### A note about compile definitions
@@ -169,10 +167,10 @@ appropriate:
 
     target_compile_definitions(my_target PUBLIC NAME_OF_KEY=<value>)
 
-The `JucePlugin_PreferredChannelConfig` preprocessor definition for plugins is difficult to specify
-in a portable way due to its use of curly braces, which may be misinterpreted in Linux/Mac builds
-using the Ninja/Makefile generators. It is recommended to avoid this option altogether, and to use
-the newer buses API to specify the desired plugin inputs and outputs.
+The `JucePlugin_PreferredChannelConfigurations` preprocessor definition for plugins is difficult to
+specify in a portable way due to its use of curly braces, which may be misinterpreted in Linux/Mac
+builds using the Ninja/Makefile generators. It is recommended to avoid this option altogether, and
+to use the newer buses API to specify the desired plugin inputs and outputs.
 
 ## API Reference
 
@@ -232,6 +230,15 @@ functions are not required. Most importantly, the 'juceaide' helper tool is not 
 option is enabled, which may improve build times for established products that use other methods to
 handle plugin bundle structures, icons, plists, and so on. If this option is enabled, then
 `JUCE_ENABLE_MODULE_SOURCE_GROUPS` will have no effect.
+
+#### `JUCE_WEBVIEW2_PACKAGE_LOCATION`
+
+You can ask JUCE to link the WebView2 library statically to your target on Windows, by specifying 
+the `NEEDS_WEBVIEW2` option when creating your target. In this case JUCE will search for the 
+WebView2 package on your system. The default search location is 
+`%userprofile%\AppData\Local\PackageManagement\NuGet\Packages`. This location can be overriden by
+specifying this option. The provided location should contain the `*Microsoft.Web.WebView2*` 
+directory.
 
 ### Functions
 
@@ -407,6 +414,11 @@ attributes directly to these creation functions, rather than adding them later.
   are set on a JUCE target. By default, we don't link Webkit because you might not need it, but
   if you get linker or include errors that reference Webkit, just set this argument to `TRUE`.
 
+`NEEDS_WEBVIEW2`
+- On Windows, JUCE may or may not need to link to WebView2 depending on the compile definitions that
+  are set on a JUCE target. By default, we don't link WebView2 because you might not need it, but
+  if you get linker or include errors that reference WebView2, just set this argument to `TRUE`.
+
 `NEEDS_STORE_KIT`
 - On macOS, JUCE may or may not need to link to StoreKit depending on the compile definitions that
   are set on a JUCE target. By default, we don't link StoreKit because you might not need it, but
@@ -565,13 +577,9 @@ attributes directly to these creation functions, rather than adding them later.
   in GarageBand.
 
 `AAX_CATEGORY`
-- Should be one or more of: `AAX_ePlugInCategory_None`, `AAX_ePlugInCategory_EQ`,
-  `AAX_ePlugInCategory_Dynamics`, `AAX_ePlugInCategory_PitchShift`, `AAX_ePlugInCategory_Reverb`,
-  `AAX_ePlugInCategory_Delay`, `AAX_ePlugInCategory_Modulation`, `AAX_ePlugInCategory_Harmonic`,
-  `AAX_ePlugInCategory_NoiseReduction`, `AAX_ePlugInCategory_Dither`,
-  `AAX_ePlugInCategory_SoundField`, `AAX_ePlugInCategory_HWGenerators`,
-  `AAX_ePlugInCategory_SWGenerators`, `AAX_ePlugInCategory_WrappedPlugin`,
-  `AAX_EPlugInCategory_Effect`
+- Should be one or more of: `None`, `EQ`, `Dynamics`, `PitchShift`, `Reverb`, `Delay`, `Modulation`,
+  `Harmonic`, `NoiseReduction`, `Dither`, `SoundField`, `HWGenerators`, `SWGenerators`,
+  `WrappedPlugin`, `Effect`, and `MIDIEffect`. You may also add the prefix `AAX_ePlugInCategory_`.
 
 `PLUGINHOST_AU`
 - May be either TRUE or FALSE (defaults to FALSE). If TRUE, will add the preprocessor definition
@@ -787,8 +795,8 @@ CMakeLists in the `modules` directory.
 
 This function parses the PIP metadata block in the provided header, and adds appropriate build
 targets for a console app, GUI app, or audio plugin. For audio plugin targets, it builds as many
-plugin formats as possible. To build AAX or VST2 targets, call `juce_set_aax_sdk_path` and/or
-`juce_set_vst2_sdk_path` *before* calling `juce_add_pip`.
+plugin formats as possible. To build VST2 targets, call `juce_set_vst2_sdk_path` *before* calling
+`juce_add_pip`.
 
 This is mainly provided to build the built-in example projects in the JUCE repo, and for building
 quick proof-of-concept demo apps with minimal set-up. For any use-case more complex than a
