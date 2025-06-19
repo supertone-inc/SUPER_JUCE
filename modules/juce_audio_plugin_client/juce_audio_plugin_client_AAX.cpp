@@ -1614,7 +1614,7 @@ namespace AAXClasses
                     if (data != nullptr)
                     {
                         AudioProcessor::TrackProperties props;
-                        props.name = String::fromUTF8 (static_cast<const AAX_IString*> (data)->Get());
+                        props.name = std::make_optional (String::fromUTF8 (static_cast<const AAX_IString*> (data)->Get()));
 
                         pluginInstance->updateTrackProperties (props);
                     }
@@ -2839,6 +2839,9 @@ namespace AAXClasses
         properties->AddProperty (AAX_eProperty_InputStemFormat,     static_cast<AAX_CPropertyValue> (aaxInputFormat));
         properties->AddProperty (AAX_eProperty_OutputStemFormat,    static_cast<AAX_CPropertyValue> (aaxOutputFormat));
 
+        // If the plugin doesn't have an editor, ask the host to provide one
+        properties->AddProperty (AAX_eProperty_UsesClientGUI,       static_cast<AAX_CPropertyValue> (! processor.hasEditor()));
+
         const auto& extensions = processor.getAAXClientExtensions();
 
         // This value needs to match the RTAS wrapper's Type ID, so that
@@ -3047,19 +3050,15 @@ namespace AAXClasses
                     auto aaxOutFormat = numOuts > 0 ? aaxFormats[outIdx] : AAX_eStemFormat_None;
                     auto outLayout = channelSetFromStemFormat (aaxOutFormat, false);
 
-                    if (hostSupportsStemFormat (aaxInFormat, featureInfo)
-                        && hostSupportsStemFormat (aaxOutFormat, featureInfo))
+                    AudioProcessor::BusesLayout fullLayout;
+
+                    if (! JuceAAX_Processor::fullBusesLayoutFromMainLayout (*plugin, inLayout, outLayout, fullLayout))
+                        continue;
+
+                    if (auto* desc = descriptor.NewComponentDescriptor())
                     {
-                        AudioProcessor::BusesLayout fullLayout;
-
-                        if (! JuceAAX_Processor::fullBusesLayoutFromMainLayout (*plugin, inLayout, outLayout, fullLayout))
-                            continue;
-
-                        if (auto* desc = descriptor.NewComponentDescriptor())
-                        {
-                            createDescriptor (*desc, fullLayout, *plugin, pluginIds, numMeters);
-                            check (descriptor.AddComponent (desc));
-                        }
+                        createDescriptor (*desc, fullLayout, *plugin, pluginIds, numMeters);
+                        check (descriptor.AddComponent (desc));
                     }
                 }
             }
