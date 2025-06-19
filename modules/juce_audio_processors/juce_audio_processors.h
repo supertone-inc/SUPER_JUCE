@@ -140,6 +140,7 @@
  #define JUCE_SUPPORT_LEGACY_AUDIOPROCESSOR 1
 #endif
 
+#define JucePlugin_EnhancedAudioSuite 1
 //==============================================================================
 #include "utilities/juce_AAXClientExtensions.h"
 #include "utilities/juce_VST2ClientExtensions.h"
