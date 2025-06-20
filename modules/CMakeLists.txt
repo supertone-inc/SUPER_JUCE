@@ -55,4 +55,5 @@ juce_add_modules(
     juce_opengl
     juce_osc
     juce_product_unlocking
-    juce_video)
+    juce_video
+    juce_global_hotkeys)
