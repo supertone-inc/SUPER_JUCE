@@ -66,6 +66,7 @@ cmake_dependent_option(JUCE_ENABLE_MODULE_SOURCE_GROUPS
     "NOT JUCE_MODULES_ONLY" OFF)
 
 add_subdirectory(modules)
+add_subdirectory(modules_extra)
 
 if(JUCE_MODULES_ONLY)
     return()
