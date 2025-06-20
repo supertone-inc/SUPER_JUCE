@@ -41,6 +41,10 @@ set_property(GLOBAL PROPERTY USE_FOLDERS YES)
 set(JUCE_MODULES_DIR "${JUCE_SOURCE_DIR}/modules" CACHE INTERNAL
     "The path to JUCE modules")
 
+set(JUCE_MODULES_EXTRA_DIR "${JUCE_SOURCE_DIR}/modules_extra" CACHE INTERNAL
+    "The path to JUCE modules extra")
+
+
 # This option will disable most of the JUCE helper functions and tools. This option exists to
 # facilitate existing CMake builds which handle things like bundle creation, icons, plists, and
 # binary data independently of JUCE. This option is not recommended - use at your own risk!
@@ -148,7 +152,7 @@ configure_package_config_file("${JUCE_CMAKE_UTILS_DIR}/JUCEConfig.cmake.in"
     PATH_VARS UTILS_INSTALL_DIR JUCEAIDE_PATH JUCE_MODULE_PATH
     INSTALL_DESTINATION "${JUCE_INSTALL_DESTINATION}")
 
-set(JUCE_MODULE_PATH "${JUCE_MODULES_DIR}")
+set(JUCE_MODULE_PATH "${JUCE_MODULES_DIR};${JUCE_MODULES_EXTRA_DIR}")
 set(UTILS_INSTALL_DIR "${CMAKE_CURRENT_SOURCE_DIR}/extras/Build/CMake")
 get_target_property(JUCEAIDE_PATH juceaide IMPORTED_LOCATION)
 configure_package_config_file("${JUCE_CMAKE_UTILS_DIR}/JUCEConfig.cmake.in"
