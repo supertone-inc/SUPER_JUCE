@@ -51,18 +51,18 @@ GlobalHotKey::PlatformSpecificData::PlatformSpecificData (GlobalHotKey& owner)
     
     if (!windowClassRegistered)
     {
-        WNDCLASS wc = {};
+        WNDCLASSW wc = {};
         wc.lpfnWndProc = windowProc;
         wc.hInstance = GetModuleHandle (nullptr);
         wc.lpszClassName = L"JuceGlobalHotKeyWindow";
         
-        if (RegisterClass (&wc) != 0)
+        if (RegisterClassW (&wc) != 0)
             windowClassRegistered = true;
     }
     
     if (windowClassRegistered)
     {
-        messageWindow = CreateWindow (
+        messageWindow = CreateWindowW (
             L"JuceGlobalHotKeyWindow",
             L"JUCE Global HotKey",
             0, 0, 0, 0, 0,
@@ -180,7 +180,7 @@ UINT GlobalHotKey::PlatformSpecificData::convertModifiersToWin32 (const Modifier
         win32Modifiers |= MOD_SHIFT;
     if (modifiers.isAltDown())
         win32Modifiers |= MOD_ALT;
-    if (modifiers.isMetaDown())
+    if (modifiers.isCommandDown())
         win32Modifiers |= MOD_WIN;
     
     return win32Modifiers;
