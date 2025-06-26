@@ -148,9 +148,42 @@ UINT GlobalHotKey::PlatformSpecificData::convertKeyCodeToWin32 (const KeyCode& k
     if (juceKey >= 0x20001 && juceKey <= 0x2000c)  // F1Key to F12Key
         return VK_F1 + (juceKey - 0x20001);
     
-    // Special keys
+    // Punctuation and special characters
     switch (juceKey)
     {
+        // Punctuation marks (Windows VK codes)
+        case '[':        return VK_OEM_4;      // Left bracket
+        case ']':        return VK_OEM_6;      // Right bracket
+        case ';':        return VK_OEM_1;      // Semicolon
+        case '\'':       return VK_OEM_7;      // Quote/apostrophe
+        case ',':        return VK_OEM_COMMA;  // Comma
+        case '.':        return VK_OEM_PERIOD; // Period
+        case '/':        return VK_OEM_2;      // Forward slash
+        case '\\':       return VK_OEM_5;      // Backslash
+        case '`':        return VK_OEM_3;      // Grave accent/backtick
+        case '-':        return VK_OEM_MINUS;  // Minus
+        case '=':        return VK_OEM_PLUS;   // Plus/equals
+        
+        // Keypad numbers (different from main number keys)
+        case 0x60000:    return VK_NUMPAD0;    // Numpad 0
+        case 0x60001:    return VK_NUMPAD1;    // Numpad 1
+        case 0x60002:    return VK_NUMPAD2;    // Numpad 2
+        case 0x60003:    return VK_NUMPAD3;    // Numpad 3
+        case 0x60004:    return VK_NUMPAD4;    // Numpad 4
+        case 0x60005:    return VK_NUMPAD5;    // Numpad 5
+        case 0x60006:    return VK_NUMPAD6;    // Numpad 6
+        case 0x60007:    return VK_NUMPAD7;    // Numpad 7
+        case 0x60008:    return VK_NUMPAD8;    // Numpad 8
+        case 0x60009:    return VK_NUMPAD9;    // Numpad 9
+        
+        // Keypad operators
+        case 0x70000:    return VK_MULTIPLY;   // Numpad *
+        case 0x70001:    return VK_ADD;        // Numpad +
+        case 0x70002:    return VK_SUBTRACT;   // Numpad -
+        case 0x70003:    return VK_DIVIDE;     // Numpad /
+        case 0x70004:    return VK_DECIMAL;    // Numpad .
+        
+        // Special keys
         case ' ':        return VK_SPACE;      // spaceKey
         case 0x1000d:    return VK_RETURN;     // returnKey
         case 0x1001b:    return VK_ESCAPE;     // escapeKey

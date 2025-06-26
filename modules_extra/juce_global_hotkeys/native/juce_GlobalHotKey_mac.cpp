@@ -427,9 +427,40 @@ UInt32 GlobalHotKey::PlatformSpecificData::convertKeyCodeToCarbon (const KeyCode
     if (juceKey >= 0x20001 && juceKey <= 0x2000c)  // F1Key to F12Key
         return kVK_F1 + (juceKey - 0x20001);
     
-    // Special keys
+    // Punctuation and special characters
     switch (juceKey)
     {
+        // Punctuation marks
+        case '[':        return 0x21;  // kVK_ANSI_LeftBracket
+        case ']':        return 0x1E;  // kVK_ANSI_RightBracket
+        case ';':        return 0x29;  // kVK_ANSI_Semicolon
+        case '\'':       return 0x27;  // kVK_ANSI_Quote
+        case ',':        return 0x2B;  // kVK_ANSI_Comma
+        case '.':        return 0x2F;  // kVK_ANSI_Period
+        case '/':        return 0x2C;  // kVK_ANSI_Slash
+        case '\\':       return 0x2A;  // kVK_ANSI_Backslash
+        case '`':        return 0x32;  // kVK_ANSI_Grave
+        case '-':        return 0x1B;  // kVK_ANSI_Minus
+        case '=':        return 0x18;  // kVK_ANSI_Equal
+        
+        // Additional special characters that might be used
+        // These are accessible with Shift on various keys
+        // Note: These are the base key codes, actual character depends on modifiers
+        
+        // Keypad numbers (if someone wants to use numpad for hotkeys)
+        // These have different key codes from main number keys
+        case 0x60000:    return 0x52;  // kVK_ANSI_Keypad0
+        case 0x60001:    return 0x53;  // kVK_ANSI_Keypad1
+        case 0x60002:    return 0x54;  // kVK_ANSI_Keypad2
+        case 0x60003:    return 0x55;  // kVK_ANSI_Keypad3
+        case 0x60004:    return 0x56;  // kVK_ANSI_Keypad4
+        case 0x60005:    return 0x57;  // kVK_ANSI_Keypad5
+        case 0x60006:    return 0x58;  // kVK_ANSI_Keypad6
+        case 0x60007:    return 0x59;  // kVK_ANSI_Keypad7
+        case 0x60008:    return 0x5B;  // kVK_ANSI_Keypad8
+        case 0x60009:    return 0x5C;  // kVK_ANSI_Keypad9
+        
+        // Special keys
         case ' ':        return kVK_Space;      // spaceKey
         case 0x1000d:    return kVK_Return;     // returnKey
         case 0x1001b:    return kVK_Escape;     // escapeKey
