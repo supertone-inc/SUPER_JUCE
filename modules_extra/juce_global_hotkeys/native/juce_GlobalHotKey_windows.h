@@ -34,18 +34,6 @@
 
 #if JUCE_WINDOWS
 
-// Forward declarations to avoid including <windows.h> in header
-extern "C"
-{
-    struct HWND__;
-    typedef HWND__* HWND;
-    typedef unsigned int UINT;
-    typedef unsigned long ULONG_PTR;
-    typedef ULONG_PTR WPARAM;
-    typedef long LPARAM;
-    typedef long LRESULT;
-}
-
 #include <unordered_map>
 #include <atomic>
 
@@ -77,15 +65,16 @@ struct GlobalHotKey::PlatformSpecificData
     
 private:
     GlobalHotKey& owner;
-    HWND messageWindow = nullptr;
+    void* messageWindow = nullptr;  // HWND as void* to avoid Windows header in public header
     int hotkeyId = 0;
     bool isRegistered = false;
     
     static int getNextHotkeyId();
-    static UINT convertKeyCodeToWin32 (const KeyCode& keyCode);
-    static UINT convertModifiersToWin32 (const ModifierKeys& modifiers);
+    static unsigned int convertKeyCodeToWin32 (const KeyCode& keyCode);
+    static unsigned int convertModifiersToWin32 (const ModifierKeys& modifiers);
     
-    static LRESULT __stdcall windowProc (HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam);
+    // Window procedure - actual types defined in .cpp file
+    static long __stdcall windowProc (void* hwnd, unsigned int msg, void* wParam, void* lParam);
     void handleHotkeyMessage();
     
     static std::unordered_map<int, PlatformSpecificData*> registeredHotkeys;

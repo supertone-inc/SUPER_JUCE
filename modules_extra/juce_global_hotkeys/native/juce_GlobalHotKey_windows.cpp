@@ -56,7 +56,7 @@ GlobalHotKey::PlatformSpecificData::PlatformSpecificData (GlobalHotKey& owner)
     if (!windowClassRegistered)
     {
         WNDCLASSW wc = {};
-        wc.lpfnWndProc = windowProc;
+        wc.lpfnWndProc = reinterpret_cast<WNDPROC>(windowProc);
         wc.hInstance = GetModuleHandle (nullptr);
         wc.lpszClassName = L"JuceGlobalHotKeyWindow";
         
@@ -66,7 +66,7 @@ GlobalHotKey::PlatformSpecificData::PlatformSpecificData (GlobalHotKey& owner)
     
     if (windowClassRegistered)
     {
-        messageWindow = CreateWindowW (
+        auto hwnd = CreateWindowW (
             L"JuceGlobalHotKeyWindow",
             L"JUCE Global HotKey",
             0, 0, 0, 0, 0,
@@ -76,8 +76,10 @@ GlobalHotKey::PlatformSpecificData::PlatformSpecificData (GlobalHotKey& owner)
             nullptr
         );
         
-        if (messageWindow != nullptr)
-            SetWindowLongPtr (messageWindow, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(this));
+        messageWindow = hwnd;  // Store as void*
+        
+        if (hwnd != nullptr)
+            SetWindowLongPtr (hwnd, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(this));
     }
 }
 
@@ -87,7 +89,7 @@ GlobalHotKey::PlatformSpecificData::~PlatformSpecificData()
     
     if (messageWindow != nullptr)
     {
-        DestroyWindow (messageWindow);
+        DestroyWindow (static_cast<HWND>(messageWindow));
         messageWindow = nullptr;
     }
 }
@@ -106,7 +108,7 @@ bool GlobalHotKey::PlatformSpecificData::registerHotKey (const KeyCode& keyCode,
     if (win32Key == 0)  // Invalid key code
         return false;
     
-    if (RegisterHotKey (messageWindow, hotkeyId, win32Modifiers, win32Key))
+    if (RegisterHotKey (static_cast<HWND>(messageWindow), hotkeyId, win32Modifiers, win32Key))
     {
         registeredHotkeys[hotkeyId] = this;
         isRegistered = true;
@@ -126,7 +128,7 @@ void GlobalHotKey::PlatformSpecificData::unregisterHotKey()
 {
     if (isRegistered && messageWindow != nullptr)
     {
-        UnregisterHotKey (messageWindow, hotkeyId);
+        UnregisterHotKey (static_cast<HWND>(messageWindow), hotkeyId);
         registeredHotkeys.erase (hotkeyId);
         isRegistered = false;
     }
@@ -138,7 +140,7 @@ int GlobalHotKey::PlatformSpecificData::getNextHotkeyId()
     return nextHotkeyId++;
 }
 
-UINT GlobalHotKey::PlatformSpecificData::convertKeyCodeToWin32 (const KeyCode& keyCode)
+unsigned int GlobalHotKey::PlatformSpecificData::convertKeyCodeToWin32 (const KeyCode& keyCode)
 {
     const auto juceKey = keyCode.getJuceKeyCode();
     
@@ -207,9 +209,9 @@ UINT GlobalHotKey::PlatformSpecificData::convertKeyCodeToWin32 (const KeyCode& k
     }
 }
 
-UINT GlobalHotKey::PlatformSpecificData::convertModifiersToWin32 (const ModifierKeys& modifiers)
+unsigned int GlobalHotKey::PlatformSpecificData::convertModifiersToWin32 (const ModifierKeys& modifiers)
 {
-    UINT win32Modifiers = MOD_NOREPEAT;  // Prevent repeated WM_HOTKEY messages
+    unsigned int win32Modifiers = MOD_NOREPEAT;  // Prevent repeated WM_HOTKEY messages
     
     if (modifiers.isCtrlDown())
         win32Modifiers |= MOD_CONTROL;
@@ -224,11 +226,17 @@ UINT GlobalHotKey::PlatformSpecificData::convertModifiersToWin32 (const Modifier
 }
 
 //==============================================================================
-LRESULT __stdcall GlobalHotKey::PlatformSpecificData::windowProc (HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
+long __stdcall GlobalHotKey::PlatformSpecificData::windowProc (void* hwnd, unsigned int msg, void* wParam, void* lParam)
 {
-    if (msg == WM_HOTKEY)
+    // Cast void* pointers back to Windows types
+    auto windowHandle = static_cast<HWND>(hwnd);
+    auto message = static_cast<UINT>(msg);
+    auto wParameter = static_cast<WPARAM>(reinterpret_cast<uintptr_t>(wParam));
+    auto lParameter = static_cast<LPARAM>(reinterpret_cast<intptr_t>(lParam));
+    
+    if (message == WM_HOTKEY)
     {
-        const auto hotkeyId = static_cast<int>(wParam);
+        const auto hotkeyId = static_cast<int>(wParameter);
         
         // Thread-safe lookup
         const auto it = registeredHotkeys.find (hotkeyId);
@@ -250,7 +258,7 @@ LRESULT __stdcall GlobalHotKey::PlatformSpecificData::windowProc (HWND hwnd, UIN
         return 0;
     }
     
-    return DefWindowProc (hwnd, msg, wParam, lParam);
+    return DefWindowProc (windowHandle, message, wParameter, lParameter);
 }
 
 void GlobalHotKey::PlatformSpecificData::handleHotkeyMessage()

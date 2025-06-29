@@ -34,6 +34,15 @@
 
 #include "../juce_global_hotkeys.h"
 
+#if JUCE_WINDOWS
+ #ifndef WIN32_LEAN_AND_MEAN
+  #define WIN32_LEAN_AND_MEAN
+ #endif
+ #include <windows.h>
+#elif JUCE_MAC
+ #include <Carbon/Carbon.h> // For kVK_ constants
+#endif
+
 namespace juce
 {
 
