@@ -100,15 +100,6 @@
  #define JUCE_GLOBAL_HOTKEYS_DEBUG_LOGGING 1
 #endif
 
-//==============================================================================
-// Platform-specific includes
-#if JUCE_WINDOWS
- #ifndef WIN32_LEAN_AND_MEAN
-  #define WIN32_LEAN_AND_MEAN
- #endif
- #include <windows.h>
-#endif
-
 #if JUCE_MAC
  #if JUCE_GLOBAL_HOTKEYS_ENABLE_CARBON_API
   #include <Carbon/Carbon.h>
