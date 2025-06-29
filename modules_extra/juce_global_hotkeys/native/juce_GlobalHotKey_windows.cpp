@@ -224,7 +224,7 @@ UINT GlobalHotKey::PlatformSpecificData::convertModifiersToWin32 (const Modifier
 }
 
 //==============================================================================
-LRESULT CALLBACK GlobalHotKey::PlatformSpecificData::windowProc (HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
+LRESULT __stdcall GlobalHotKey::PlatformSpecificData::windowProc (HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 {
     if (msg == WM_HOTKEY)
     {
