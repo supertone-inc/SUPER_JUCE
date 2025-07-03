@@ -38,100 +38,91 @@
 #define WIN32_LEAN_AND_MEAN
 #endif
 #include <windows.h>
+#include <mutex>
+
 namespace juce
 {
 
 //==============================================================================
 // Static member initialization
-std::unordered_map<int, GlobalHotKey::PlatformSpecificData*> GlobalHotKey::PlatformSpecificData::registeredHotkeys;
+void* GlobalHotKey::PlatformSpecificData::keyboardHook = nullptr;
+std::unordered_map<int, GlobalHotKey::PlatformSpecificData::HotKeyInfo> GlobalHotKey::PlatformSpecificData::registeredHotkeys;
+std::mutex GlobalHotKey::PlatformSpecificData::registeredHotkeysMutex;
 std::atomic<int> GlobalHotKey::PlatformSpecificData::nextHotkeyId {1};
+std::atomic<int> GlobalHotKey::PlatformSpecificData::hookRefCount {0};
 
 //==============================================================================
 GlobalHotKey::PlatformSpecificData::PlatformSpecificData (GlobalHotKey& owner)
     : owner (owner)
 {
-    // Create a message-only window to receive WM_HOTKEY messages
-    static bool windowClassRegistered = false;
+    hotKeyInfo.owner = this;
+    hotKeyInfo.id = -1;
     
-    if (!windowClassRegistered)
-    {
-        WNDCLASSW wc = {};
-        wc.lpfnWndProc = reinterpret_cast<WNDPROC>(windowProc);
-        wc.hInstance = GetModuleHandle (nullptr);
-        wc.lpszClassName = L"JuceGlobalHotKeyWindow";
-        
-        if (RegisterClassW (&wc) != 0)
-            windowClassRegistered = true;
-    }
-    
-    if (windowClassRegistered)
-    {
-        auto hwnd = CreateWindowW (
-            L"JuceGlobalHotKeyWindow",
-            L"JUCE Global HotKey",
-            0, 0, 0, 0, 0,
-            HWND_MESSAGE,  // Message-only window
-            nullptr,
-            GetModuleHandle (nullptr),
-            nullptr
-        );
-        
-        messageWindow = hwnd;  // Store as void*
-        
-        if (hwnd != nullptr)
-            SetWindowLongPtr (hwnd, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(this));
-    }
+    DBG ("GlobalHotKey: PlatformSpecificData created");
 }
 
 GlobalHotKey::PlatformSpecificData::~PlatformSpecificData()
 {
     unregisterHotKey();
-    
-    if (messageWindow != nullptr)
-    {
-        DestroyWindow (static_cast<HWND>(messageWindow));
-        messageWindow = nullptr;
-    }
+    DBG ("GlobalHotKey: PlatformSpecificData destroyed");
 }
 
 //==============================================================================
 bool GlobalHotKey::PlatformSpecificData::registerHotKey (const KeyCode& keyCode, const ModifierKeys& modifiers)
 {
-    if (isRegistered || messageWindow == nullptr)
-        return false;
-    
-    hotkeyId = getNextHotkeyId();
-    
-    const auto win32Key = convertKeyCodeToWin32 (keyCode);
-    const auto win32Modifiers = convertModifiersToWin32 (modifiers);
-    
-    if (win32Key == 0)  // Invalid key code
-        return false;
-    
-    if (RegisterHotKey (static_cast<HWND>(messageWindow), hotkeyId, win32Modifiers, win32Key))
+    if (isRegistered)
     {
-        registeredHotkeys[hotkeyId] = this;
-        isRegistered = true;
-        return true;
+        DBG ("GlobalHotKey: Already registered");
+        return false;
     }
     
-    // If registration failed, common reasons:
-    // ERROR_HOTKEY_ALREADY_REGISTERED (1409) - hotkey already in use
-    // ERROR_HOTKEY_NOT_REGISTERED (1419) - invalid combination
-    const auto error = GetLastError();
-    (void) error;  // Suppress unused variable warning in release builds
+    // Install hook if not already installed
+    if (!installHook())
+    {
+        DBG ("GlobalHotKey: Failed to install keyboard hook");
+        return false;
+    }
     
-    return false;
+    // Setup hotkey info
+    hotKeyInfo.keyCode = keyCode;
+    hotKeyInfo.modifiers = modifiers;
+    hotKeyInfo.id = getNextHotkeyId();
+    
+    // Register the hotkey
+    {
+        std::lock_guard<std::mutex> lock (registeredHotkeysMutex);
+        registeredHotkeys[hotKeyInfo.id] = hotKeyInfo;
+    }
+    
+    isRegistered = true;
+    
+    DBG ("GlobalHotKey: Successfully registered hotkey with ID: " << hotKeyInfo.id
+         << ", JUCE Key: " << keyCode.getJuceKeyCode()
+         << ", Modifiers: " << modifiers.getRawFlags());
+    
+    return true;
 }
 
 void GlobalHotKey::PlatformSpecificData::unregisterHotKey()
 {
-    if (isRegistered && messageWindow != nullptr)
+    if (!isRegistered)
+        return;
+    
+    // Remove from registered hotkeys
     {
-        UnregisterHotKey (static_cast<HWND>(messageWindow), hotkeyId);
-        registeredHotkeys.erase (hotkeyId);
-        isRegistered = false;
+        std::lock_guard<std::mutex> lock (registeredHotkeysMutex);
+        registeredHotkeys.erase (hotKeyInfo.id);
     }
+    
+    isRegistered = false;
+    
+    // Uninstall hook if no more hotkeys are registered
+    if (registeredHotkeys.empty())
+    {
+        uninstallHook();
+    }
+    
+    DBG ("GlobalHotKey: Unregistered hotkey with ID: " << hotKeyInfo.id);
 }
 
 //==============================================================================
@@ -140,125 +131,148 @@ int GlobalHotKey::PlatformSpecificData::getNextHotkeyId()
     return nextHotkeyId++;
 }
 
-unsigned int GlobalHotKey::PlatformSpecificData::convertKeyCodeToWin32 (const KeyCode& keyCode)
+bool GlobalHotKey::PlatformSpecificData::installHook()
 {
-    const auto juceKey = keyCode.getJuceKeyCode();
+    std::lock_guard<std::mutex> lock (registeredHotkeysMutex);
     
-    // Convert common JUCE key codes to Windows virtual key codes
-    if (juceKey >= 'A' && juceKey <= 'Z')
-        return juceKey;
-    if (juceKey >= '0' && juceKey <= '9')
-        return juceKey;
-    
-    // Function keys (using our own constants)
-    if (juceKey >= 0x20001 && juceKey <= 0x2000c)  // F1Key to F12Key
-        return VK_F1 + (juceKey - 0x20001);
-    
-    // Punctuation and special characters
-    switch (juceKey)
+    if (keyboardHook != nullptr)
     {
-        // Punctuation marks (Windows VK codes)
-        case '[':        return VK_OEM_4;      // Left bracket
-        case ']':        return VK_OEM_6;      // Right bracket
-        case ';':        return VK_OEM_1;      // Semicolon
-        case '\'':       return VK_OEM_7;      // Quote/apostrophe
-        case ',':        return VK_OEM_COMMA;  // Comma
-        case '.':        return VK_OEM_PERIOD; // Period
-        case '/':        return VK_OEM_2;      // Forward slash
-        case '\\':       return VK_OEM_5;      // Backslash
-        case '`':        return VK_OEM_3;      // Grave accent/backtick
-        case '-':        return VK_OEM_MINUS;  // Minus
-        case '=':        return VK_OEM_PLUS;   // Plus/equals
-        
-        // Keypad numbers (different from main number keys)
-        case 0x60000:    return VK_NUMPAD0;    // Numpad 0
-        case 0x60001:    return VK_NUMPAD1;    // Numpad 1
-        case 0x60002:    return VK_NUMPAD2;    // Numpad 2
-        case 0x60003:    return VK_NUMPAD3;    // Numpad 3
-        case 0x60004:    return VK_NUMPAD4;    // Numpad 4
-        case 0x60005:    return VK_NUMPAD5;    // Numpad 5
-        case 0x60006:    return VK_NUMPAD6;    // Numpad 6
-        case 0x60007:    return VK_NUMPAD7;    // Numpad 7
-        case 0x60008:    return VK_NUMPAD8;    // Numpad 8
-        case 0x60009:    return VK_NUMPAD9;    // Numpad 9
-        
-        // Keypad operators
-        case 0x70000:    return VK_MULTIPLY;   // Numpad *
-        case 0x70001:    return VK_ADD;        // Numpad +
-        case 0x70002:    return VK_SUBTRACT;   // Numpad -
-        case 0x70003:    return VK_DIVIDE;     // Numpad /
-        case 0x70004:    return VK_DECIMAL;    // Numpad .
-        
-        // Special keys
-        case ' ':        return VK_SPACE;      // spaceKey
-        case 0x1000d:    return VK_RETURN;     // returnKey
-        case 0x1001b:    return VK_ESCAPE;     // escapeKey
-        case 0x10008:    return VK_BACK;       // backspaceKey
-        case 0x1007f:    return VK_DELETE;     // deleteKey
-        case 0x10009:    return VK_TAB;        // tabKey
-        case 0x10012:    return VK_LEFT;       // leftKey
-        case 0x10014:    return VK_RIGHT;      // rightKey
-        case 0x10013:    return VK_UP;         // upKey
-        case 0x10015:    return VK_DOWN;       // downKey
-        case 0x10010:    return VK_HOME;       // homeKey
-        case 0x10011:    return VK_END;        // endKey
-        case 0x10016:    return VK_PRIOR;      // pageUpKey
-        case 0x10017:    return VK_NEXT;       // pageDownKey
-        case 0x10019:    return VK_INSERT;     // insertKey
-        default:         return 0;
+        ++hookRefCount;
+        return true;  // Hook already installed
+    }
+    
+    // Install low-level keyboard hook
+    auto hook = SetWindowsHookEx (
+        WH_KEYBOARD_LL,
+        reinterpret_cast<HOOKPROC>(keyboardHookProc),
+        GetModuleHandle (nullptr),
+        0  // Global hook
+    );
+    
+    if (hook != nullptr)
+    {
+        keyboardHook = hook;
+        hookRefCount = 1;
+        DBG ("GlobalHotKey: Keyboard hook installed successfully");
+        return true;
+    }
+    else
+    {
+        auto error = GetLastError();
+        DBG ("GlobalHotKey: Failed to install keyboard hook. Error: " << error);
+        return false;
     }
 }
 
-unsigned int GlobalHotKey::PlatformSpecificData::convertModifiersToWin32 (const ModifierKeys& modifiers)
+void GlobalHotKey::PlatformSpecificData::uninstallHook()
 {
-    unsigned int win32Modifiers = MOD_NOREPEAT;  // Prevent repeated WM_HOTKEY messages
+    std::lock_guard<std::mutex> lock (registeredHotkeysMutex);
     
-    if (modifiers.isCtrlDown())
-        win32Modifiers |= MOD_CONTROL;
-    if (modifiers.isShiftDown())
-        win32Modifiers |= MOD_SHIFT;
-    if (modifiers.isAltDown())
-        win32Modifiers |= MOD_ALT;
-    if (modifiers.isCommandDown())
-        win32Modifiers |= MOD_WIN;
+    if (keyboardHook == nullptr)
+        return;
     
-    return win32Modifiers;
+    --hookRefCount;
+    
+    if (hookRefCount <= 0)
+    {
+        if (UnhookWindowsHookEx (static_cast<HHOOK>(keyboardHook)))
+        {
+            DBG ("GlobalHotKey: Keyboard hook uninstalled successfully");
+        }
+        else
+        {
+            auto error = GetLastError();
+            DBG ("GlobalHotKey: Failed to uninstall keyboard hook. Error: " << error);
+        }
+        
+        keyboardHook = nullptr;
+        hookRefCount = 0;
+    }
 }
 
 //==============================================================================
-long __stdcall GlobalHotKey::PlatformSpecificData::windowProc (void* hwnd, unsigned int msg, void* wParam, void* lParam)
+long __stdcall GlobalHotKey::PlatformSpecificData::keyboardHookProc (int nCode, void* wParam, void* lParam)
 {
-    // Cast void* pointers back to Windows types
-    auto windowHandle = static_cast<HWND>(hwnd);
-    auto message = static_cast<UINT>(msg);
-    auto wParameter = static_cast<WPARAM>(reinterpret_cast<uintptr_t>(wParam));
-    auto lParameter = static_cast<LPARAM>(reinterpret_cast<intptr_t>(lParam));
-    
-    if (message == WM_HOTKEY)
+    if (nCode >= 0)
     {
-        const auto hotkeyId = static_cast<int>(wParameter);
+        auto message = static_cast<UINT>(reinterpret_cast<uintptr_t>(wParam));
+        auto kbStruct = static_cast<KBDLLHOOKSTRUCT*>(lParam);
         
-        // Thread-safe lookup
-        const auto it = registeredHotkeys.find (hotkeyId);
-        
-        if (it != registeredHotkeys.end() && it->second != nullptr)
+        // Only handle key down events
+        if (message == WM_KEYDOWN || message == WM_SYSKEYDOWN)
         {
-            // Capture the pointer for safe async call
-            auto* hotkey = it->second;
+            int vkCode = kbStruct->vkCode;
+            auto currentModifiers = getCurrentModifiers();
             
-            // Forward the hotkey event to the JUCE message thread
-            MessageManager::callAsync ([hotkey]()
+            // Check all registered hotkeys
+            std::lock_guard<std::mutex> lock (registeredHotkeysMutex);
+            
+            for (const auto& pair : registeredHotkeys)
             {
-                // Double-check the hotkey is still valid
-                if (hotkey != nullptr)
-                    hotkey->handleHotkeyMessage();
-            });
+                const auto& hotkey = pair.second;
+                
+                if (matchesHotKey (hotkey, vkCode, currentModifiers))
+                {
+                    DBG ("GlobalHotKey: Hotkey matched! ID: " << hotkey.id 
+                         << ", VK: " << vkCode 
+                         << ", Modifiers: " << currentModifiers.getRawFlags());
+                    
+                    // Call the callback asynchronously on the JUCE message thread
+                    MessageManager::callAsync ([hotkeyOwner = hotkey.owner]()
+                    {
+                        if (hotkeyOwner != nullptr)
+                        {
+                            DBG ("GlobalHotKey: Executing hotkey callback");
+                            hotkeyOwner->handleHotkeyMessage();
+                        }
+                    });
+                    
+                    // Note: We don't return here - allow multiple hotkeys to match
+                    // and don't consume the key event (let other apps receive it)
+                }
+            }
         }
-        
-        return 0;
     }
     
-    return DefWindowProc (windowHandle, message, wParameter, lParameter);
+    // Always call next hook - don't consume the key event
+    return CallNextHookEx (static_cast<HHOOK>(keyboardHook), nCode, 
+                          reinterpret_cast<WPARAM>(wParam), reinterpret_cast<LPARAM>(lParam));
+}
+
+//==============================================================================
+bool GlobalHotKey::PlatformSpecificData::matchesHotKey (const HotKeyInfo& hotkey, int vkCode, const ModifierKeys& currentModifiers)
+{
+    // Use KeyCode's built-in platform conversion method
+    int expectedVkCode = hotkey.keyCode.getPlatformKeyCode();
+    
+    if (expectedVkCode == 0)
+        return false;
+    
+    // Check if the key matches
+    if (vkCode != expectedVkCode)
+        return false;
+    
+    // Check if modifiers match
+    return currentModifiers.getRawFlags() == hotkey.modifiers.getRawFlags();
+}
+
+ModifierKeys GlobalHotKey::PlatformSpecificData::getCurrentModifiers()
+{
+    int flags = 0;
+    
+    if (GetAsyncKeyState (VK_CONTROL) & 0x8000)
+        flags |= ModifierKeys::ctrlModifier;
+    
+    if (GetAsyncKeyState (VK_SHIFT) & 0x8000)
+        flags |= ModifierKeys::shiftModifier;
+    
+    if (GetAsyncKeyState (VK_MENU) & 0x8000)  // Alt key
+        flags |= ModifierKeys::altModifier;
+    
+    if ((GetAsyncKeyState (VK_LWIN) & 0x8000) || (GetAsyncKeyState (VK_RWIN) & 0x8000))
+        flags |= ModifierKeys::commandModifier;
+    
+    return ModifierKeys (flags);
 }
 
 void GlobalHotKey::PlatformSpecificData::handleHotkeyMessage()

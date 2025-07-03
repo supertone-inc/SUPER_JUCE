@@ -36,18 +36,19 @@
 
 #include <unordered_map>
 #include <atomic>
+#include <mutex>
 
 namespace juce
 {
 
 //==============================================================================
 /**
-    Windows-specific implementation of global hotkeys using RegisterHotKey API.
+    Windows-specific implementation of global hotkeys using Low-Level Keyboard Hook.
     
-    This implementation uses the Windows RegisterHotKey API to register global
-    system hotkeys that can be triggered even when the application is in the
-    background. The implementation handles WM_HOTKEY messages and forwards
-    them to the JUCE message thread.
+    This implementation uses SetWindowsHookEx with WH_KEYBOARD_LL to monitor
+    keyboard events globally. Unlike RegisterHotKey, this approach allows
+    multiple applications to monitor the same key combinations without
+    interfering with each other.
     
     @tags{GlobalHotKeys}
 */
@@ -65,20 +66,38 @@ struct GlobalHotKey::PlatformSpecificData
     
 private:
     GlobalHotKey& owner;
-    void* messageWindow = nullptr;  // HWND as void* to avoid Windows header in public header
-    int hotkeyId = 0;
+    
+    // Hook-based implementation
+    struct HotKeyInfo
+    {
+        KeyCode keyCode;
+        ModifierKeys modifiers;
+        PlatformSpecificData* owner;
+        int id;
+    };
+    
+    HotKeyInfo hotKeyInfo;
     bool isRegistered = false;
     
-    static int getNextHotkeyId();
-    static unsigned int convertKeyCodeToWin32 (const KeyCode& keyCode);
-    static unsigned int convertModifiersToWin32 (const ModifierKeys& modifiers);
-    
-    // Window procedure - actual types defined in .cpp file
-    static long __stdcall windowProc (void* hwnd, unsigned int msg, void* wParam, void* lParam);
-    void handleHotkeyMessage();
-    
-    static std::unordered_map<int, PlatformSpecificData*> registeredHotkeys;
+    // Static hook management
+    static void* keyboardHook;  // HHOOK as void*
+    static std::unordered_map<int, HotKeyInfo> registeredHotkeys;
+    static std::mutex registeredHotkeysMutex;
     static std::atomic<int> nextHotkeyId;
+    static std::atomic<int> hookRefCount;
+    
+    static int getNextHotkeyId();
+    static bool installHook();
+    static void uninstallHook();
+    
+    // Hook procedure
+    static long __stdcall keyboardHookProc(int nCode, void* wParam, void* lParam);
+    
+    // Key matching
+    static bool matchesHotKey(const HotKeyInfo& hotkey, int vkCode, const ModifierKeys& currentModifiers);
+    static ModifierKeys getCurrentModifiers();
+    
+    void handleHotkeyMessage();
 };
 
 } // namespace juce
