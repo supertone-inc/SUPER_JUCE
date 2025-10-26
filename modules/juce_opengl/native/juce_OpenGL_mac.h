@@ -220,7 +220,7 @@ public:
             const auto newArea = peer->getAreaCoveredBy (owner);
 
             if (convertToRectInt ([view frame]) != newArea)
-                [view setFrame: makeNSRect (newArea)];
+                [view setFrame: makeCGRect (newArea)];
         }
     }
 
@@ -294,6 +294,9 @@ public:
         int numFramesPerSwap = 0;
         double videoRefreshPeriodS = 1.0 / 60.0;
     };
+
+    void addListener (NativeContextListener&) {}
+    void removeListener (NativeContextListener&) {}
 
     Component& owner;
     NSOpenGLContext* renderContext = nil;

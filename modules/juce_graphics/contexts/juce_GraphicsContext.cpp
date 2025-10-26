@@ -461,14 +461,26 @@ void Graphics::drawText (const String& text, int x, int y, int width, int height
 void Graphics::drawFittedText (const String& text, Rectangle<int> area,
                                Justification justification,
                                const int maximumNumberOfLines,
-                               const float minimumHorizontalScale) const
+                               const float minimumHorizontalScale,
+                               GlyphArrangementOptions options) const
 {
     if (text.isEmpty() || area.isEmpty() || ! context.clipRegionIntersects (area))
         return;
 
     struct ArrangementArgs
     {
-        auto tie() const noexcept { return std::tie (font, text, width, height, justification, maximumNumberOfLines, minimumHorizontalScale); }
+        auto tie() const noexcept
+        {
+            return std::tie (font,
+                             text,
+                             width,
+                             height,
+                             justification,
+                             maximumNumberOfLines,
+                             minimumHorizontalScale,
+                             options);
+        }
+
         bool operator< (const ArrangementArgs& other) const noexcept { return tie() < other.tie(); }
 
         const Font font;
@@ -478,6 +490,7 @@ void Graphics::drawFittedText (const String& text, Rectangle<int> area,
         const Justification justification;
         const int maximumNumberOfLines;
         const float minimumHorizontalScale;
+        GlyphArrangementOptions options;
     };
 
     auto configureArrangement = [] (const ArrangementArgs& args)
@@ -488,7 +501,8 @@ void Graphics::drawFittedText (const String& text, Rectangle<int> area,
                                    args.width, args.height,
                                    args.justification,
                                    args.maximumNumberOfLines,
-                                   args.minimumHorizontalScale);
+                                   args.minimumHorizontalScale,
+                                   args.options);
         return arrangement;
     };
 
@@ -498,7 +512,8 @@ void Graphics::drawFittedText (const String& text, Rectangle<int> area,
                            (float) area.getHeight(),
                            justification,
                            maximumNumberOfLines,
-                           minimumHorizontalScale };
+                           minimumHorizontalScale,
+                           options };
 
     using Cache = GlyphArrangementCache<ArrangementArgs>;
     Cache::getInstance()->get (std::move (args), std::move (configureArrangement))
@@ -509,10 +524,11 @@ void Graphics::drawFittedText (const String& text, Rectangle<int> area,
 void Graphics::drawFittedText (const String& text, int x, int y, int width, int height,
                                Justification justification,
                                const int maximumNumberOfLines,
-                               const float minimumHorizontalScale) const
+                               const float minimumHorizontalScale,
+                               GlyphArrangementOptions options) const
 {
     drawFittedText (text, coordsToRectangle (x, y, width, height),
-                    justification, maximumNumberOfLines, minimumHorizontalScale);
+                    justification, maximumNumberOfLines, minimumHorizontalScale, options);
 }
 
 //==============================================================================
@@ -870,5 +886,77 @@ Graphics::ScopedSaveState::~ScopedSaveState()
 {
     context.restoreState();
 }
+
+//==============================================================================
+//==============================================================================
+#if JUCE_UNIT_TESTS
+
+class GraphicsTests : public UnitTest
+{
+public:
+    GraphicsTests() : UnitTest ("Graphics", UnitTestCategories::graphics) {}
+
+    void runTest() override
+    {
+        beginTest ("Render image subsection");
+        {
+            const SoftwareImageType softwareImageType;
+            const NativeImageType nativeImageType;
+            const ImageType* types[] { &softwareImageType, &nativeImageType };
+
+            for (auto* sourceType : types)
+                for (auto* targetType : types)
+                    renderImageSubsection (*sourceType, *targetType);
+        }
+    }
+
+private:
+    void renderImageSubsection (const ImageType& sourceType, const ImageType& targetType)
+    {
+        const auto sourceColour = Colours::cyan;
+        const auto sourceOffset = 49;
+
+        const Image source { Image::ARGB, 50, 50, true, sourceType };
+        const Image target { Image::ARGB, 50, 50, true, targetType };
+
+        const auto subsection = source.getClippedImage (Rectangle { sourceOffset, sourceOffset, 1, 1 });
+
+        Image::BitmapData { subsection, Image::BitmapData::writeOnly }.setPixelColour (0, 0, sourceColour);
+
+        {
+            // Render the subsection image so that it fills 'target'
+            Graphics g { target };
+            // Use low resampling quality, because we want to avoid our pixel getting blurry when it's scaled up
+            g.setImageResamplingQuality (Graphics::lowResamplingQuality);
+            g.drawImage (subsection,
+                         0, 0, target.getWidth(), target.getHeight(),
+                         0, 0, 1, 1);
+        }
+
+        {
+            // Check that all pixels in 'target' match the bottom right pixel of 'source'
+            const Image::BitmapData bitmap { target, Image::BitmapData::readOnly };
+
+            int numFailures = 0;
+
+            for (auto y = 0; y < bitmap.height; ++y)
+            {
+                for (auto x = 0; x < bitmap.width; ++x)
+                {
+                    const auto targetColour = bitmap.getPixelColour (x, y);
+
+                    if (targetColour != sourceColour)
+                        ++numFailures;
+                }
+            }
+
+            expect (numFailures == 0);
+        }
+    }
+};
+
+static GraphicsTests graphicsTests;
+
+#endif
 
 } // namespace juce
